@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import streamlit as st
 from PIL import Image
@@ -19,14 +20,24 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Detect if running in Streamlit Community Cloud
+IS_CLOUD = os.getenv("SERVER_SOFTWARE", "").startswith("streamlit") or "STREAMLIT_SERVER_PORT" in os.environ
+
+if IS_CLOUD:
+    st.warning("⚠️ **Cloud Demo Mode:** Browsing your local Windows files and opening VS Code desktop is only available when running this app locally.")
+
 st.markdown('<div class="main-header">⚡ Quick Folder Launcher</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-text">Navigate directories and preview files before opening in VS Code.</div>', unsafe_allow_html=True)
 
 # Initialize Session State
 if "current_dir" not in st.session_state:
-    st.session_state.current_dir = os.path.expanduser("~")
+    # Use current working directory for cloud demo, home directory for local execution
+    st.session_state.current_dir = os.getcwd() if IS_CLOUD else os.path.expanduser("~")
 
 current_dir = st.session_state.current_dir
+
+# Check if VS Code CLI 'code' is installed and available in PATH
+HAS_VSCODE = shutil.which("code") is not None
 
 # --- QUICK JUMP BAR ---
 st.caption("📌 Quick Locations")
@@ -68,11 +79,16 @@ col_open, col_up = st.columns([3, 1])
 
 with col_open:
     if st.button("🚀 OPEN THIS FOLDER IN VS CODE", type="primary"):
-        try:
-            subprocess.run(["code", current_dir], check=True, shell=True)
-            st.toast("Opened successfully in VS Code!", icon="✅")
-        except Exception as e:
-            st.error(f"Could not open VS Code: {e}")
+        if IS_CLOUD:
+            st.error("Cannot launch local applications from the web app. Run the executable locally!")
+        elif not HAS_VSCODE:
+            st.error("⚠️ Visual Studio Code is not installed or not added to your system PATH.")
+        else:
+            try:
+                subprocess.run(["code", current_dir], check=True, shell=True)
+                st.toast("Opened successfully in VS Code!", icon="✅")
+            except Exception as e:
+                st.error(f"Could not open VS Code: {e}")
 
 with col_up:
     parent_dir = os.path.dirname(current_dir)
@@ -123,7 +139,7 @@ else:
 
 st.divider()
 
-# --- NEW: FILE LIST VIEWER & PREVIEW ---
+# --- FILE LIST VIEWER & PREVIEW ---
 st.subheader("📄 Files in this Folder")
 
 if files:
